@@ -800,6 +800,115 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
     return df
 
 
+# -----------------------------------------------------------------------------
+# This is script to calibrate for fs with A already computed
+
+@global_task(log)
+def calibrate_inversion_from_consensus_fs(gdirs, ignore_missing=True,
+                                          glen_a=None, fs_bounds=(0, 100),
+                                          error_on_mismatch=True,
+                                          filter_inversion_output=True):
+    """Fit the total volume of the glaciers to the 2019 consensus estimate.
+
+    This method finds the "best fs" to match all glaciers in gdirs with
+    a valid inverted volume.
+
+    Parameters
+    ----------
+    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    ignore_missing : bool
+        set this to true to silence the error if some glaciers could not be
+        found in the consensus estimate.
+    A : float
+    fs_bounds: tuple
+        factor to apply to default fs (= 5.7e-20 from Oerlemans)
+    error_on_mismatch: bool
+        sometimes the given bounds do not allow to find a zero mismatch:
+        this will normally raise an error, but you can switch this off,
+        use the closest value instead and move on.
+    filter_inversion_output : bool
+        whether or not to apply terminus thickness filtering on the inversion
+        output (needs the downstream lines to work).
+
+    Returns
+    -------
+    a dataframe with the individual glacier volumes
+    """
+
+    gdirs = utils.tolist(gdirs)
+
+    # Get the ref data for the glaciers we have
+    df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
+    rids = [gdir.rgi_id for gdir in gdirs]
+
+    found_ids = df.index.intersection(rids)
+    if not ignore_missing and (len(found_ids) != len(rids)):
+        raise InvalidWorkflowError('Could not find matching indices in the '
+                                   'consensus estimate for all provided '
+                                   'glaciers. Set ignore_missing=True to '
+                                   'ignore this error.')
+
+    df = df.reindex(rids)
+
+    # Optimize the diff to ref
+    def_fs = cfg.PARAMS['inversion_fs']
+
+    def compute_vol(x):
+        inversion_tasks(gdirs, glen_a=None, fs=x * def_fs,
+                        filter_inversion_output=filter_inversion_output)
+        odf = df.copy()
+        odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
+        return odf.dropna()
+
+    def to_minimize(x):
+        log.workflow('Consensus estimate optimisation with '
+                     'A: {} and fs factor: {}'.format(glen_a, x))
+        odf = compute_vol(x)
+        return odf.vol_itmix_m3.sum() - odf.oggm.sum()
+
+    try:
+        out_fac, r = optimization.brentq(to_minimize, *fs_bounds, rtol=1e-2,
+                                         full_output=True)
+        if r.converged:
+            log.workflow('calibrate_inversion_from_consensus '
+                         'converged after {} iterations and A={}. The '
+                         'resulting fs factor is {}.'
+                         ''.format(r.iterations, glen_a, out_fac))
+        else:
+            raise ValueError('Unexpected error in optimization.brentq')
+    except ValueError:
+        # Ok can't find an fs. Log for debug:
+        odf1 = compute_vol(fs_bounds[0]).sum() * 1e-9
+        odf2 = compute_vol(fs_bounds[1]).sum() * 1e-9
+        msg = ('calibration from consensus estimate CAN\'T converge with A={}.\n'
+               'Bound values (km3):\nRef={:.3f} OGGM={:.3f} for fs factor {}\n'
+               'Ref={:.3f} OGGM={:.3f} for fs factor {}'
+               ''.format(glen_a,
+                         odf1.vol_itmix_m3, odf1.oggm, fs_bounds[0],
+                         odf2.vol_itmix_m3, odf2.oggm, fs_bounds[1]))
+        if error_on_mismatch:
+            raise ValueError(msg)
+
+        out_fac = fs_bounds[int(abs(odf1.vol_itmix_m3 - odf1.oggm) >
+                                abs(odf2.vol_itmix_m3 - odf2.oggm))]
+        log.workflow(msg)
+        log.workflow('We use A factor = {} and fs = {} and move on.'
+                     ''.format(glen_a, out_fac))
+
+    # Compute the final volume with the correct fs
+    inversion_tasks(gdirs, glen_a=None, fs=out_fac * def_fs,
+                    filter_inversion_output=filter_inversion_output)
+    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
+
+    cfg.PARAMS['inversion_fs'] = out_fac * def_fs
+
+    return df
+
+
+# -----------------------------------------------------------------------------
+
+
 @global_task(log)
 def match_regional_geodetic_mb(gdirs, rgi_reg=None, dataset='hugonnet',
                                period='2000-01-01_2020-01-01'):
