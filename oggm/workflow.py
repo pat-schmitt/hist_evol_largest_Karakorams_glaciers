@@ -8,12 +8,14 @@ from collections.abc import Sequence
 import multiprocessing
 import numpy as np
 import pandas as pd
+import xarray as xr
 from scipy import optimize as optimization
 
 # Locals
 import oggm
 from oggm import cfg, tasks, utils
 from oggm.core import centerlines, flowline, climate
+from oggm.core.massbalance import MultipleFlowlineMassBalance
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
 from oggm.utils import global_task, entity_task
 
@@ -801,8 +803,42 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
 
 # -----------------------------------------------------------------------------
-# This is script to calibrate for fs with A already computed
+# This is a script to calibrate A depending on the temperature
+@entity_task(log)
+def calibrate_glen_a_from_temperature(gdir):
+    """TODO"""
+    # extract temperature of climate data
+    with xr.open_dataset(gdir.get_filepath('climate_historical')) as ds:
+        ds = ds.load()
+    temp = ds.temp.values
 
+    # TODO: why originally rounded
+    mean_temp = np.mean(temp)
+
+    # Getting a *very rough* estimate of glacier mean temperature: Teff
+    Ts = mean_temp + 273  # Temp. @ glacier surface = 2-meter temp from ERA5-L
+    Tb = -1 + 273  # Taking @ 0C or -1C with pressure melting effect
+    fb = 0.75  # Random... 0.5 - 1...
+    T_eff = fb * Tb + (1 - fb) * Ts
+
+    # Some values to calculate A (Deformation parameter) from Cuffey and Patterson 2010 (Equation 3.35)
+    A_star = 3.5e-25  # At -10C  ( s^-1 Pa^-3)
+    T_star = 263  # Ignore pressure correction
+    R = 8.314  # J/mol/K
+    Q_plus = 115e3  # J/mol    (if T_eff > T_star) ~152 from laboratory exp
+    Q_minus = 60e3  # J/mol    (if T_eff < T_star)
+
+    # Calculation of A (Deformation parameter) from Cuffey and Patterson 2010 (Equation 3.35)
+    Qc = Q_plus if T_eff > T_star else Q_minus
+
+    A = A_star * np.exp(- Qc / R * (1 / T_eff - 1 / T_star))
+
+    gdir.add_to_diagnostics('inversion_glen_a', A)
+
+    return A
+
+
+# This is a script to calibrate for fs with A already computed
 @entity_task(log)
 def calibrate_inversion_from_consensus_fs(gdir, ignore_missing=True,
                                           glen_a=None, fs_bounds=(0, 100),
