@@ -15,7 +15,7 @@ import oggm
 from oggm import cfg, tasks, utils
 from oggm.core import centerlines, flowline, climate
 from oggm.exceptions import InvalidParamsError, InvalidWorkflowError
-from oggm.utils import global_task
+from oggm.utils import global_task, entity_task
 
 # MPI
 try:
@@ -803,8 +803,8 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 # -----------------------------------------------------------------------------
 # This is script to calibrate for fs with A already computed
 
-@global_task(log)
-def calibrate_inversion_from_consensus_fs(gdirs, ignore_missing=True,
+@entity_task(log)
+def calibrate_inversion_from_consensus_fs(gdir, ignore_missing=True,
                                           glen_a=None, fs_bounds=(0, 100),
                                           error_on_mismatch=True,
                                           filter_inversion_output=True):
@@ -815,12 +815,15 @@ def calibrate_inversion_from_consensus_fs(gdirs, ignore_missing=True,
 
     Parameters
     ----------
-    gdirs : list of :py:class:`oggm.GlacierDirectory` objects
+    gdir : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
     ignore_missing : bool
         set this to true to silence the error if some glaciers could not be
         found in the consensus estimate.
-    A : float
+    glen_a : float or None
+        the glen A factor which should be used during the calibration of the
+        inversion. If None and only one glacier directory given use specific
+        'inversion_glen_a' otherwise the global cfg.PARAMS['inversion_glen_a'].
     fs_bounds: tuple
         factor to apply to default fs (= 5.7e-20 from Oerlemans)
     error_on_mismatch: bool
@@ -836,11 +839,13 @@ def calibrate_inversion_from_consensus_fs(gdirs, ignore_missing=True,
     a dataframe with the individual glacier volumes
     """
 
-    gdirs = utils.tolist(gdirs)
+    if glen_a is None:
+        diag = gdir.get_diagnostics()
+        glen_a = diag.get('inversion_glen_a', cfg.PARAMS['glen_a'])
 
     # Get the ref data for the glaciers we have
     df = pd.read_hdf(utils.get_demo_file('rgi62_itmix_df.h5'))
-    rids = [gdir.rgi_id for gdir in gdirs]
+    rids = [gdir.rgi_id]
 
     found_ids = df.index.intersection(rids)
     if not ignore_missing and (len(found_ids) != len(rids)):
@@ -855,10 +860,10 @@ def calibrate_inversion_from_consensus_fs(gdirs, ignore_missing=True,
     def_fs = cfg.PARAMS['inversion_fs']
 
     def compute_vol(x):
-        inversion_tasks(gdirs, glen_a=None, fs=x * def_fs,
+        inversion_tasks([gdir], glen_a=glen_a, fs=x * def_fs,
                         filter_inversion_output=filter_inversion_output)
         odf = df.copy()
-        odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
+        odf['oggm'] = execute_entity_task(tasks.get_inversion_volume, [gdir])
         return odf.dropna()
 
     def to_minimize(x):
@@ -897,11 +902,12 @@ def calibrate_inversion_from_consensus_fs(gdirs, ignore_missing=True,
                      ''.format(glen_a, out_fac))
 
     # Compute the final volume with the correct fs
-    inversion_tasks(gdirs, glen_a=None, fs=out_fac * def_fs,
+    inversion_tasks([gdir], glen_a=glen_a, fs=out_fac * def_fs,
                     filter_inversion_output=filter_inversion_output)
-    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, gdirs)
+    df['vol_oggm_m3'] = execute_entity_task(tasks.get_inversion_volume, [gdir])
 
-    cfg.PARAMS['inversion_fs'] = out_fac * def_fs
+    # here we save the sliding parameter to the current gdir
+    gdir.add_to_diagnostics('inversion_fs', out_fac * def_fs)
 
     return df
 
