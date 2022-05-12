@@ -843,10 +843,11 @@ def calibrate_glen_a_from_temperature(gdir):
 def calibrate_inversion_from_consensus_fs(gdir, ignore_missing=True,
                                           glen_a=None, fs_bounds=(0, 100),
                                           error_on_mismatch=True,
-                                          filter_inversion_output=True):
+                                          filter_inversion_output=True,
+                                          volume_m3_reference=None):
     """Fit the total volume of the glaciers to the 2019 consensus estimate.
 
-    This method finds the "best fs" to match all glaciers in gdirs with
+    This method finds the "best fs" to match the glaciers in gdir with
     a valid inverted volume.
 
     Parameters
@@ -869,6 +870,8 @@ def calibrate_inversion_from_consensus_fs(gdir, ignore_missing=True,
     filter_inversion_output : bool
         whether or not to apply terminus thickness filtering on the inversion
         output (needs the downstream lines to work).
+    volume_m3_reference : float
+        Option to give an own total glacier volume to match to
 
     Returns
     -------
@@ -906,7 +909,10 @@ def calibrate_inversion_from_consensus_fs(gdir, ignore_missing=True,
         log.workflow('Consensus estimate optimisation with '
                      'A: {} and fs factor: {}'.format(glen_a, x))
         odf = compute_vol(x)
-        return odf.vol_itmix_m3.sum() - odf.oggm.sum()
+        if volume_m3_reference is None:
+            return odf.vol_itmix_m3.sum() - odf.oggm.sum()
+        else:
+            return volume_m3_reference - odf.oggm.sum()
 
     try:
         out_fac, r = optimization.brentq(to_minimize, *fs_bounds, rtol=1e-2,
@@ -922,17 +928,23 @@ def calibrate_inversion_from_consensus_fs(gdir, ignore_missing=True,
         # Ok can't find an fs. Log for debug:
         odf1 = compute_vol(fs_bounds[0]).sum() * 1e-9
         odf2 = compute_vol(fs_bounds[1]).sum() * 1e-9
+        if volume_m3_reference is None:
+            ref_vol_1 = odf1.vol_itmix_m3 * 1e-9
+            ref_vol_2 = odf2.vol_itmix_m3 * 1e-9
+        else:
+            ref_vol_1 = volume_m3_reference * 1e-9
+            ref_vol_2 = volume_m3_reference * 1e-9
         msg = ('calibration from consensus estimate CAN\'T converge with A={}.\n'
                'Bound values (km3):\nRef={:.3f} OGGM={:.3f} for fs factor {}\n'
                'Ref={:.3f} OGGM={:.3f} for fs factor {}'
                ''.format(glen_a,
-                         odf1.vol_itmix_m3, odf1.oggm, fs_bounds[0],
-                         odf2.vol_itmix_m3, odf2.oggm, fs_bounds[1]))
+                         ref_vol_1, odf1.oggm, fs_bounds[0],
+                         ref_vol_2, odf2.oggm, fs_bounds[1]))
         if error_on_mismatch:
             raise ValueError(msg)
 
-        out_fac = fs_bounds[int(abs(odf1.vol_itmix_m3 - odf1.oggm) >
-                                abs(odf2.vol_itmix_m3 - odf2.oggm))]
+        out_fac = fs_bounds[int(abs(ref_vol_1 - odf1.oggm) >
+                                abs(ref_vol_2 - odf2.oggm))]
         log.workflow(msg)
         log.workflow('We use A factor = {} and fs = {} and move on.'
                      ''.format(glen_a, out_fac))

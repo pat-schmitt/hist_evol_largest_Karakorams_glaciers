@@ -4763,11 +4763,11 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion(
     apparent_mb_from_any_mb(gdir)
     # do inversion with A calibration to current volume
     # TODO: add tests for giving own volume_m3_reference
-    calibrate_inversion_from_consensus([gdir],
-                                       apply_fs_on_mismatch=True,
-                                       error_on_mismatch=False,
-                                       filter_inversion_output=True,
-                                       volume_m3_reference=_vol_m3_ref[0])
+    calibrate_inversion_from_consensus_fs(gdir,
+                                          #apply_fs_on_mismatch=True,
+                                          error_on_mismatch=False,
+                                          filter_inversion_output=True,
+                                          volume_m3_reference=_vol_m3_ref[0])
     # And finally initialise the new model flowlines
     init_present_time_glacier(gdir)
 
@@ -5594,7 +5594,7 @@ def dynamic_mu_star_calibration(
 # error as in 'workflow' 'tasks' is imported which need some function from this
 # file, maybe we find a more elegant solution for this, maybe try to import in
 # function definition
-from oggm.workflow import calibrate_inversion_from_consensus
+from oggm.workflow import calibrate_inversion_from_consensus, calibrate_inversion_from_consensus_fs
 
 
 def zero_glacier_stop_criterion(model, state, n_zero=5, n_years=20):
