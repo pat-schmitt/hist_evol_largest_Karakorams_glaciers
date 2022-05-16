@@ -3784,7 +3784,7 @@ def run_with_hydro(gdir, run_task=None, store_monthly_hydro=False,
 
 
 # TODO: this is done for debugging reasons!!
-# @entity_task(log)
+@entity_task(log)
 def run_dynamic_spinup(gdir, init_model_filesuffix=None,
                        init_model_fls=None,
                        climate_input_filesuffix='',
@@ -4022,7 +4022,7 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
     # This is necessary if yr_rgi < yr_min + 10 or if the dynamic spinup failed.
     def save_model_without_dynamic_spinup():
         gdir.add_to_diagnostics('run_dynamic_spinup_success', False)
-        yr_use = np.clip(yr_rgi, yr_min, None)
+        yr_use = np.clip(spinup_start_yr, yr_min, None)
         model_dynamic_spinup_end = evolution_model(fls_spinup,
                                                    mb_historical,
                                                    y0=yr_use,
@@ -4418,8 +4418,11 @@ def run_dynamic_spinup(gdir, init_model_filesuffix=None,
 
         # second (arbitrary) guess is given depending on the outcome of first
         # guess, when mismatch is 100% t_bias is changed for
-        # t_bias_max_step_length
-        step = mismatch[-1] * t_bias_max_step_length / 100
+        # t_bias_max_step_length, but at least the second guess is 0.2 °C away
+        # from the first guess
+        step = np.sign(mismatch[-1]) * max(np.abs(mismatch[-1]) *
+                                           t_bias_max_step_length / 100,
+                                           0.2)
         new_mismatch, new_t_bias = get_mismatch(t_bias_guess[0] + step)
         t_bias_guess.append(new_t_bias)
         mismatch.append(new_mismatch)
@@ -4582,8 +4585,8 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion(
         output_filesuffix='', evolution_model=FluxBasedModel,
         minimise_for='area', climate_input_filesuffix='', spinup_period=20,
         min_spinup_period=10, yr_rgi=None, precision_percent_dyn_spinup=1,
-        precision_absolute_dyn_spinup=1, min_ice_thickness=10,
-        first_guess_t_bias=-2, t_bias_max_step_length=2, maxiter_dyn_spinup=30,
+        precision_absolute_dyn_spinup=1, min_ice_thickness=0,
+        first_guess_t_bias=-10, t_bias_max_step_length=2, maxiter_dyn_spinup=30,
         store_model_geometry=True, store_fl_diagnostics=None,
         _t_bias_guesses=[], _vol_m3_ref=[], set_local_variables=False,
         get_local_variables=False, **kwargs):

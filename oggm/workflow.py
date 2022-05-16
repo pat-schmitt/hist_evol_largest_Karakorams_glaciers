@@ -812,8 +812,13 @@ def calibrate_glen_a_from_temperature(gdir):
         ds = ds.load()
     temp = ds.temp.values
 
+    # convert temperature to glacier elevation
+    gl = utils.get_rgi_glacier_entities([gdir.rgi_id])
+    hgt_diff = gl['Zmed'].values[0] - ds.attrs['ref_hgt']
+    temp_hgt_correction = hgt_diff * cfg.PARAMS['temp_default_gradient']
+
     # TODO: why originally rounded
-    mean_temp = np.mean(temp)
+    mean_temp = np.mean(temp + temp_hgt_correction)
 
     # Getting a *very rough* estimate of glacier mean temperature: Teff
     Ts = mean_temp + 273  # Temp. @ glacier surface = 2-meter temp from ERA5-L
