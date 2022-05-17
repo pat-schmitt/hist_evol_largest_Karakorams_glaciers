@@ -5223,7 +5223,10 @@ def dynamic_mu_star_calibration(
             # provided run_function, so we us the fallback_function
             gdir.add_to_diagnostics('run_dynamic_mu_star_calibration_success',
                                     0)
-            local_variables = run_function(gdir, get_local_variables=True)
+            local_variables = run_function(gdir, mu_star=None, yr0_ref_mb=None,
+                                           yr1_ref_mb=None, fls_init=None,
+                                           ys=None, ye=None,
+                                           get_local_variables=True)
             model = fallback_function(gdir=gdir, mu_star=mu_star,
                                       fls_init=fls_init, ys=ys, ye=ye,
                                       local_variables=local_variables,
