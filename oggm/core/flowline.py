@@ -5017,7 +5017,7 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback(
 def dynamic_mu_star_calibration(
         gdir, ref_dmdtda=None, err_ref_dmdtda=None, ref_period='',
         ignore_hydro_months=False, min_mu_star=None, max_mu_star=None,
-        mu_star_max_step_length=5, maxiter_mu_star=10, ignore_errors=True,
+        mu_star_max_step_length=5, maxiter_mu_star=30, ignore_errors=True,
         output_filesuffix='_historical_dynamic_mu_star', ys=None, ye=None,
         run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
         kwargs_run_function=None,
