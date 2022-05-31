@@ -5023,7 +5023,7 @@ def dynamic_mu_star_calibration(
         kwargs_run_function=None,
         fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
         kwargs_fallback_function=None, init_model_filesuffix=None,
-        init_model_fls=None
+        init_model_fls=None, get_run_function=False
         ):
     """Calibrate mu_star to match a geodetic mass balance incorporating a
     dynamic model run.
@@ -5539,6 +5539,9 @@ def dynamic_mu_star_calibration(
     # define function for the actual minimisation
     c_fun, models_dynamic_spinup_end = init_cost_fun()
 
+    if get_run_function:
+        return c_fun, precision_percent_dmdtda
+
     # define minimiser
     minimise_given_fct, mu_star_guesses, mismatch_dmdtda = init_minimiser()
 
@@ -5589,6 +5592,8 @@ def dynamic_mu_star_calibration(
     gdir.add_to_diagnostics('mu_star_dynamic_calibration', float(final_mu_star))
     gdir.add_to_diagnostics('mu_star_before_dynamic_calibration',
                             float(mu_star_initial))
+    gdir.add_to_diagnostics('dmdtda_mismatch_with_initial_mu_star_percent',
+                            float(mismatch_dmdtda[0]))
     gdir.add_to_diagnostics('dynamic_mu_star_calibration_runs',
                             int(dynamic_mu_star_calibration_runs[-1]))
 
