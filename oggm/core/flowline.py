@@ -5015,10 +5015,11 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback(
 
 @entity_task(log, writes=['inversion_flowlines'])
 def dynamic_mu_star_calibration(
-        gdir, ref_dmdtda=None, err_ref_dmdtda=None, ref_period='',
-        ignore_hydro_months=False, min_mu_star=None, max_mu_star=None,
-        mu_star_max_step_length=5, maxiter_mu_star=30, ignore_errors=True,
-        output_filesuffix='_historical_dynamic_mu_star', ys=None, ye=None,
+        gdir, ref_dmdtda=None, err_ref_dmdtda=None, min_precision=20,
+        ref_period='', ignore_hydro_months=False, min_mu_star=None,
+        max_mu_star=None, mu_star_max_step_length=5, maxiter_mu_star=30,
+        ignore_errors=True, output_filesuffix='_historical_dynamic_mu_star',
+        ys=None, ye=None,
         run_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion,
         kwargs_run_function=None,
         fallback_function=dynamic_mu_star_run_with_dynamic_spinup_and_inversion_fallback,
@@ -5049,6 +5050,9 @@ def dynamic_mu_star_calibration(
         None the data from Hugonnet 2021 is used.
         Default is None
     err_ref_dmdtda
+    min_precision : float
+        Defines a minimum precision to meet in percent (for the case of very
+        large uncertainty of the geodetic mass balance)
     ref_period : str
         If ref_dmdtda is None one of '2000-01-01_2010-01-01',
         '2010-01-01_2020-01-01', '2000-01-01_2020-01-01'. If ref_dmdtda is
@@ -5173,9 +5177,12 @@ def dynamic_mu_star_calibration(
         # error of reference geodetic mass balance from Hugonnet 2021
         err_ref_dmdtda = float(df_ref_dmdtda.loc[df_ref_dmdtda['period'] ==
                                                  ref_period]['err_dmdtda'])
+        err_ref_dmdtda *= 1000  # kg m-2 yr-1
+
     # Define the precision we want to reach during the minimisation using the
-    # provided geodetic mass balance error
-    precision_percent_dmdtda = 100 / abs(ref_dmdtda) * err_ref_dmdtda
+    # provided geodetic mass balance error or minimum provided precision
+    precision_percent_dmdtda = min(min_precision,
+                                   100 / abs(ref_dmdtda) * err_ref_dmdtda)
 
     # get start and end year of geodetic mb
     yr0_ref_mb, yr1_ref_mb = ref_period.split('_')
