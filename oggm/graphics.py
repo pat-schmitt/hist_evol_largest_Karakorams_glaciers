@@ -390,7 +390,7 @@ def plot_centerlines(gdirs, ax=None, smap=None, use_flowlines=False,
 
 @_plot_map
 def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
-                         mask_cmap='Set2'):
+                         mask_cmap='Set2',releif_factor=0.7):
     """Plots the catchments out of a glacier directory.
     """
 
@@ -402,7 +402,7 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
         topo = nc.variables['topo'][:]
         mask = nc.variables['glacier_mask'][:] * np.NaN
 
-    smap.set_topography(topo)
+    smap.set_topography(topo, relief_factor=relief_factor)
 
     crs = gdir.grid.center_grid
     geom = gdir.read_pickle('geometries')
@@ -436,7 +436,7 @@ def plot_catchment_areas(gdirs, ax=None, smap=None, lines_cmap='Set1',
 @_plot_map
 def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
                          add_intersects=False, add_touches=False,
-                         lines_cmap='Set1'):
+                         lines_cmap='Set1',relief_factor=0.7):
     """Plots the catchment widths out of a glacier directory.
     """
 
@@ -445,7 +445,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
         topo = nc.variables['topo'][:]
     # Dirty optim
     try:
-        smap.set_topography(topo)
+        smap.set_topography(topo, relief_factor=relief_factor)
     except ValueError:
         pass
 
@@ -509,7 +509,7 @@ def plot_catchment_width(gdirs, ax=None, smap=None, corrected=False,
 @_plot_map
 def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
                    plot_var='thick', cbar_label='Section thickness (m)',
-                   color_map='YlGnBu'):
+                   color_map='YlGnBu',relief_factor=0.7):
     """Plots the result of the inversion out of a glacier directory.
        Default is thickness (m). Change plot_var to u_surface or u_integrated
        for velocity (m/yr)."""
@@ -520,7 +520,7 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
 
     # Dirty optim
     try:
-        smap.set_topography(topo)
+        smap.set_topography(topo, relief_factor=relief_factor)
     except ValueError:
         pass
 
@@ -572,7 +572,7 @@ def plot_inversion(gdirs, ax=None, smap=None, linewidth=3, vmax=None,
 
 
 @_plot_map
-def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
+def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix='',relief_factor=0.7):
     """Plots the result of the inversion out of a glacier directory.
 
     Method: 'alt' or 'interp'
@@ -583,7 +583,7 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
     with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
         topo = nc.variables['topo'][:]
 
-    smap.set_topography(topo)
+    smap.set_topography(topo, relief_factor=relief_factor)
 
     for gdir in gdirs:
         grids_file = gdir.get_filepath('gridded_data')
@@ -622,7 +622,8 @@ def plot_distributed_thickness(gdirs, ax=None, smap=None, varname_suffix=''):
 @_plot_map
 def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
                          vmax=None, linewidth=3, filesuffix='',
-                         modelyr=None):
+                         modelyr=None,cbar_label='Section thickness (m)',
+                         relief_factor=0.7,color_map='YlGnBu'):
     """Plots the result of the model output."""
 
     gdir = gdirs[0]
@@ -631,7 +632,7 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
 
     # Dirty optim
     try:
-        smap.set_topography(topo)
+        smap.set_topography(topo, relief_factor=relief_factor)
     except ValueError:
         pass
 
@@ -673,17 +674,95 @@ def plot_modeloutput_map(gdirs, ax=None, smap=None, model=None,
                                         shpg.Point(cur + wi/2. * n2)])
                 toplot_lines.append(line)
                 toplot_crs.append(crs)
-
-    dl = salem.DataLevels(cmap=OGGM_CMAPS['section_thickness'],
+      
+    dl = salem.DataLevels(cmap=plt.get_cmap(color_map),
                           data=toplot_th, vmin=0, vmax=vmax)
     colors = dl.to_rgb()
     for l, c, crs in zip(toplot_lines, colors, toplot_crs):
         smap.set_geometry(l, crs=crs, color=c,
                           linewidth=linewidth, zorder=50)
     smap.plot(ax)
-    return dict(cbar_label='Section thickness [m]',
+    return dict(cbar_label=cbar_label,
                 cbar_primitive=dl,
                 title_comment=' -- year: {:d}'.format(np.int64(model.yr)))
+
+
+
+@_plot_map
+def plot_modeloutput_map_diff(gdirs, ax=None, smap=None, model1=None, model2=None,
+                              vmax=None, vmin=None, linewidth=3, filesuffix='',
+                              modelyr=None,cbar_label='Section thickness (m)',
+                              relief_factor=0.7,color_map='YlGnBu'):
+    """Plots the result of the model output."""
+
+    gdir = gdirs[0]
+    with utils.ncDataset(gdir.get_filepath('gridded_data')) as nc:
+        topo = nc.variables['topo'][:]
+
+    # Dirty optim
+    try:
+        smap.set_topography(topo, relief_factor=relief_factor)
+    except ValueError:
+        pass
+    
+    toplot_th1 = np.array([])
+    toplot_th2 = np.array([])
+    toplot_lines = []
+    toplot_crs = []
+
+    models1 = utils.tolist(model1)
+    models2 = utils.tolist(model2)    
+    for gdir, model1, model2 in zip(gdirs, models1, models2):
+        geom = gdir.read_pickle('geometries')
+        poly_pix = geom['polygon_pix']
+
+        crs = gdir.grid.center_grid
+        smap.set_geometry(poly_pix, crs=crs, fc='none', zorder=2, linewidth=.2)
+
+        poly_pix = utils.tolist(poly_pix)
+        for _poly in poly_pix:
+            for l in _poly.interiors:
+                smap.set_geometry(l, crs=crs, color='black', linewidth=0.5)
+
+        # plot Centerlines
+        cls1 = model1.fls
+        for l in cls1:
+            smap.set_geometry(l.line, crs=crs, color='gray',
+                              linewidth=1.2, zorder=50)
+            toplot_th1 = np.append(toplot_th1, l.thick)
+            widths = l.widths.copy()
+            widths = np.where(l.thick > 0, widths, 0.)
+            for wi, cur, (n1, n2) in zip(widths, l.line.coords, l.normals):
+                line = shpg.LineString([shpg.Point(cur + wi/2. * n1),
+                                        shpg.Point(cur + wi/2. * n2)])
+                toplot_lines.append(line)
+                toplot_crs.append(crs)
+                
+        cls2 = model2.fls
+        for l in cls2:
+            smap.set_geometry(l.line, crs=crs, color='gray',
+                              linewidth=1.2, zorder=50)
+            toplot_th2 = np.append(toplot_th2, l.thick)
+            widths = l.widths.copy()
+            widths = np.where(l.thick > 0, widths, 0.)
+            for wi, cur, (n1, n2) in zip(widths, l.line.coords, l.normals):
+                line = shpg.LineString([shpg.Point(cur + wi/2. * n1),
+                                        shpg.Point(cur + wi/2. * n2)])
+                toplot_lines.append(line)
+                toplot_crs.append(crs)                
+                
+    thick_diff = toplot_th2 - toplot_th1
+      
+    dl = salem.DataLevels(cmap=plt.get_cmap(color_map),
+                          data=thick_diff, vmin=vmin, vmax=vmax)
+    colors = dl.to_rgb()
+    for l, c, crs in zip(toplot_lines, colors, toplot_crs):
+        smap.set_geometry(l, crs=crs, color=c,
+                          linewidth=linewidth, zorder=50)
+    smap.plot(ax)
+    return dict(cbar_label=cbar_label,
+                cbar_primitive=dl,
+                title_comment='')
 
 
 def plot_modeloutput_section(model=None, ax=None, title=''):
