@@ -975,6 +975,10 @@ def calibrate_inversion_from_consensus_fs(gdir, ignore_missing=True,
 
     # here we save the sliding parameter to the current gdir
     gdir.add_to_diagnostics('inversion_fs', out_fac * def_fs)
+    
+    #The fs parameter is not being overwritten in above line
+    #Need to do this - check later...
+    cfg.PARAMS['inversion_fs'] = out_fac * def_fs
 
     return df
 
