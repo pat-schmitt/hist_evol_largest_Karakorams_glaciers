@@ -853,6 +853,10 @@ def compute_glen_a_from_temperature(gdir,fb=None):
     A = A_star * np.exp(- Qc / R * (1 / T_eff - 1 / T_star))
 
     gdir.add_to_diagnostics('inversion_glen_a', A)
+    
+    #The A parameter is not being overwritten in above line
+    #Need to do this - check later...
+    cfg.PARAMS['inversion_glen_a'] = A
 
     return A
 
