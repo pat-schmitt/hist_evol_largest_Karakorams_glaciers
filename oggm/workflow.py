@@ -814,8 +814,10 @@ def compute_glen_a_from_temperature(gdir,fb=None):
     gdir : list of :py:class:`oggm.GlacierDirectory` objects
         the glacier directories to process
     fb : So, this is tricky. It is a random value between 0-1
-         that makes temperature closer to base vs surface.
-         Default is 0.75 (no reason). See paper.
+         that affects linear temp change between surface and base
+         inside glacier. 0 means effective glacier temp = T surface
+         1 means Teff = T-base (= -1C)
+         Default is 0.75 (No reason. See paper.)
     """
     # extract temperature of climate data
     with xr.open_dataset(gdir.get_filepath('climate_historical')) as ds:
