@@ -4763,7 +4763,10 @@ def dynamic_mu_star_run_with_dynamic_spinup_and_inversion(
     df['mu_star_flowline_avg'] = mu_star
     df['mu_star_allsame'] = True
     gdir.write_json(df, 'local_mustar')
-    apparent_mb_from_any_mb(gdir)
+    
+    years = np.arange(2000, 2020)
+    apparent_mb_from_any_mb(gdir,mb_years=years)
+    
     # do inversion with A calibration to current volume
     # TODO: add tests for giving own volume_m3_reference
     calibrate_inversion_from_consensus_fs(gdir,
