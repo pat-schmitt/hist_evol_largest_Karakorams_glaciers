@@ -1297,12 +1297,16 @@ class FlowlineModel(object):
                     diag_ds['volume_m3_min_h'].data[i] = np.sum([np.sum(
                         (fl.section * fl.dx_meter)[fl.thick > dynamic_spinup_min_ice_thick])
                         for fl in self.fls])
+                else:
+                    diag_ds['volume_m3_min_h'].data[i] = self.volume_m3
             if 'area' in ovars:
                 diag_ds['area_m2'].data[i] = self.area_m2
                 if dynamic_spinup_min_ice_thick is not None:
                     diag_ds['area_m2_min_h'].data[i] = np.sum([np.sum(
                         fl.bin_area_m2[fl.thick > dynamic_spinup_min_ice_thick])
                         for fl in self.fls])
+                else:
+                    diag_ds['area_m2_min_h'].data[i] = self.area_m2
             if 'length' in ovars:
                 diag_ds['length_m'].data[i] = self.length_m
             if 'calving' in ovars:
