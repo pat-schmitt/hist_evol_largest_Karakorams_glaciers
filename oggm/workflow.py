@@ -803,10 +803,22 @@ def calibrate_inversion_from_consensus(gdirs, ignore_missing=True,
 
 
 # -----------------------------------------------------------------------------
-# This is a script to calibrate A depending on the temperature
+# This is a script to compute A using a temperature-based formula
 @entity_task(log)
-def calibrate_glen_a_from_temperature(gdir):
-    """TODO"""
+def compute_glen_a_from_temperature(gdir,fb=None):
+    """ Computes Glen-A using an estimate of glacier-mean surface temp.
+        Not the most refined way - but works for now.
+
+    Parameters
+    ----------
+    gdir : list of :py:class:`oggm.GlacierDirectory` objects
+        the glacier directories to process
+    fb : So, this is tricky. It is a random value between 0-1
+         that affects linear temp change between surface and base
+         inside glacier. 0 means effective glacier temp = T surface
+         1 means Teff = T-base (= -1C)
+         Default is 0.75 (No reason. See paper.)
+    """
     # extract temperature of climate data
     with xr.open_dataset(gdir.get_filepath('climate_historical')) as ds:
         ds = ds.load()
@@ -817,21 +829,23 @@ def calibrate_glen_a_from_temperature(gdir):
     hgt_diff = gl['Zmed'].values[0] - ds.attrs['ref_hgt']
     temp_hgt_correction = hgt_diff * cfg.PARAMS['temp_default_gradient']
 
-    # TODO: why originally rounded
     mean_temp = np.mean(temp + temp_hgt_correction)
 
     # Getting a *very rough* estimate of glacier mean temperature: Teff
-    Ts = mean_temp + 273  # Temp. @ glacier surface = 2-meter temp from ERA5-L
-    Tb = -1 + 273  # Taking @ 0C or -1C with pressure melting effect
-    fb = 0.75  # Random... 0.5 - 1...
+    Ts = mean_temp + 273  # Temp. @ glacier surface (e.g., 2-meter temp from ERA5-L)
+    Tb = -1 + 273         # Taking @ 0C or -1C with pressure melting effect
+        
+    if fb is None:
+        fb = 0.75  # Random... 0.5 - 1...
+        
     T_eff = fb * Tb + (1 - fb) * Ts
 
     # Some values to calculate A (Deformation parameter) from Cuffey and Patterson 2010 (Equation 3.35)
     A_star = 3.5e-25  # At -10C  ( s^-1 Pa^-3)
-    T_star = 263  # Ignore pressure correction
-    R = 8.314  # J/mol/K
-    Q_plus = 115e3  # J/mol    (if T_eff > T_star) ~152 from laboratory exp
-    Q_minus = 60e3  # J/mol    (if T_eff < T_star)
+    T_star = 263      # Ignore pressure correction
+    R = 8.314         # J/mol/K
+    Q_plus = 115e3    # J/mol    (for T_eff > T_star) ~152 from laboratory exp
+    Q_minus = 60e3    # J/mol    (for T_eff < T_star)
 
     # Calculation of A (Deformation parameter) from Cuffey and Patterson 2010 (Equation 3.35)
     Qc = Q_plus if T_eff > T_star else Q_minus
@@ -839,6 +853,10 @@ def calibrate_glen_a_from_temperature(gdir):
     A = A_star * np.exp(- Qc / R * (1 / T_eff - 1 / T_star))
 
     gdir.add_to_diagnostics('inversion_glen_a', A)
+    
+    #The A parameter is not being overwritten in above line
+    #Need to do this - check later...
+    cfg.PARAMS['inversion_glen_a'] = A
 
     return A
 
@@ -961,6 +979,10 @@ def calibrate_inversion_from_consensus_fs(gdir, ignore_missing=True,
 
     # here we save the sliding parameter to the current gdir
     gdir.add_to_diagnostics('inversion_fs', out_fac * def_fs)
+    
+    #The fs parameter is not being overwritten in above line
+    #Need to do this - check later...
+    cfg.PARAMS['inversion_fs'] = out_fac * def_fs
 
     return df
 
